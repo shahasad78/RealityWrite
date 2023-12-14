@@ -55,10 +55,11 @@ struct WrappingView: View {
 
 struct ARViewContainer: UIViewRepresentable {
     
+    @ObservedObject var recognizedObj: ModelRecognizer = .shared
+    
     func makeUIView(context: Context) -> ARView {
-        
-        @ObservedObject var recognizedObj: ModelRecognizer = .shared
-        return recognizedObj.arView
+        let arView = recognizedObj.arView
+        return arView
         
 //        let arView = ARView(frame: .zero)
 //
@@ -79,7 +80,25 @@ struct ARViewContainer: UIViewRepresentable {
         
     }
     
-    func updateUIView(_ uiView: ARView, context: Context) {}
+    func updateUIView(_ uiView: ARView, context: Context) {
+        
+        // for now let's try to do just one anchor
+        if recognizedObj.arView.scene.anchors.count > 0 {
+            recognizedObj.arView.scene.anchors.removeAll()
+        }
+        
+        let textEntity = make3DLabel(forWord: recognizedObj.recognizedObject)
+        
+        let camTransform = recognizedObj.arView.cameraTransform
+        
+        // set the transform of the text to be in the center of the camera, and .5 meters away
+        let anchorEntity = AnchorEntity(world: camTransform.matrix)
+        textEntity.position.z -= 0.5 // place text .5 meters away from the camera along the Z axis
+        
+        anchorEntity.addChild(textEntity)
+        
+        recognizedObj.arView.scene.addAnchor(anchorEntity)
+    }
     
 }
 
@@ -137,9 +156,34 @@ func continuouslyUpdate() {
 }
 
 // TODO: finish implementation
-func generate3DLabel(forWord: String) -> SCNText {
+func make3DLabel(forWord word: String) -> ModelEntity {
     // Generate a 3D label to place on the anchor
-    return SCNText()
+    let textLabel = SCNText(string: word, extrusionDepth: 1.0)
+    let material = SCNMaterial()
+    material.diffuse.contents = UIColor.cyan
+    textLabel.materials = [material]
+    
+    let color = generateRandomColor()
+    let shader = SimpleMaterial(color: color, roughness: 1, isMetallic: true)
+    let mesh = MeshResource.generateText(
+        word,
+        extrusionDepth: 0.05,
+        font: .init(name: "Helvetica", size: 0.05)!,
+        alignment: .center
+    )
+    
+    let textEntity = ModelEntity(mesh: mesh, materials: [shader])
+    
+    
+    return textEntity
+}
+
+func generateRandomColor() -> UIColor {
+    let redValue = CGFloat(drand48())
+    let greenValue = CGFloat(drand48())
+    let blueValue = CGFloat(drand48())
+    let color = UIColor(red: redValue, green: greenValue, blue: blueValue, alpha: 1.0)
+    return color
 }
 
 #Preview {
